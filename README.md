@@ -1,115 +1,104 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Cargo Bot - Telegram Delivery Cost Calculator
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Telegram bot for calculating delivery costs based on cargo parameters. Built with NestJS and integrated with Google Sheets for calculations and data storage.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- Calculate delivery costs for cargo and white goods
+- Support for weight, volume, and price-based calculations
+- User request history tracking
+- Integration with Google Sheets for calculations and data storage
+- Multi-language support (Russian/English)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Prerequisites
 
-## Project setup
+- Node.js (v14 or higher)
+- npm or yarn
+- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+- Google Cloud Project with Google Sheets API enabled
+- Google Service Account credentials
 
+## Installation
+
+1. Clone the repository:
 ```bash
-$ npm install
+git clone <repository-url>
+cd cargo-bot
 ```
 
-## Compile and run the project
-
+2. Install dependencies:
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+3. Create a `.env` file in the root directory with the following variables:
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+GOOGLE_CREDENTIALS_PATH=path/to/your/credentials.json
+GOOGLE_SPREADSHEET_ID=your_spreadsheet_id
 ```
 
-## Deployment
+4. Place your Google Service Account credentials JSON file in the specified path.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Google Sheets Setup
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+1. Create a new Google Spreadsheet with the following sheets:
+   - "Расчет" - For cost calculations
+   - "История" - For storing user request history
 
+2. Share the spreadsheet with the service account email address from your credentials file.
+
+3. Ensure the spreadsheet has the following structure:
+   - "Расчет" sheet: Columns A-F (Type, Weight, Volume, Price, Description, Result)
+   - "История" sheet: Columns A-F (Timestamp, User ID, Type, Weight, Volume, Price, Description)
+
+## Running the Application
+
+Development mode:
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Production mode:
+```bash
+npm run build
+npm run start:prod
+```
 
-## Resources
+## Usage
 
-Check out a few resources that may come in handy when working with NestJS:
+1. Start a chat with your bot on Telegram
+2. Use the following commands:
+   - `/start` - Start the bot and get welcome message
+   - `/calculate` - Start a new calculation
+   - `/history` - View your calculation history
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+3. Follow the bot's prompts to enter:
+   - Cargo type (cargo/white)
+   - Weight (in kg)
+   - Volume (in m³)
+   - Price (in currency)
+   - Description
 
 ## Project Structure
 
 ```
 src/
-  telegram/
-    telegram.module.ts
-    telegram.service.ts
-  google-sheets/
-    google-sheets.module.ts
-    google-sheets.service.ts
-  user-history/
-    user-history.module.ts
-    user-history.service.ts
-  app.module.ts
-  main.ts
+├── config/           # Configuration files
+├── google-sheets/    # Google Sheets integration
+├── telegram/         # Telegram bot handlers
+├── app.module.ts     # Main application module
+└── main.ts          # Application entry point
 ```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details. 
