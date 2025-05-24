@@ -24,7 +24,7 @@ export class TelegramService {
       {
         reply_markup: {
           keyboard: [
-            [{ text: '/calc' }]
+            [{ text: '/calc' }],
           ],
           resize_keyboard: true,
           one_time_keyboard: false
@@ -149,9 +149,11 @@ export class TelegramService {
     try {
       switch (state.step) {
         case 'weight':
-          const weight = parseFloat(text);
+          let weightStr = text.replace(/\s+/g, '').replace(',', '.');
+          weightStr = weightStr.replace(/[^\d.]/g, '');
+          const weight = parseFloat(weightStr);
           if (isNaN(weight) || weight <= 0) {
-            await ctx.reply('Пожалуйста, введите корректный вес (число больше 0):');
+            await ctx.reply('Пожалуйста, введите корректный вес (число больше 0, например: 12.5):');
             return;
           }
           this.stateService.setState(userId, { ...state, weight, step: 'volume' });
@@ -159,9 +161,11 @@ export class TelegramService {
           break;
 
         case 'volume':
-          const volume = parseFloat(text);
+          let volumeStr = text.replace(/\s+/g, '').replace(',', '.');
+          volumeStr = volumeStr.replace(/[^\d.]/g, '');
+          const volume = parseFloat(volumeStr);
           if (isNaN(volume) || volume <= 0) {
-            await ctx.reply('Пожалуйста, введите корректный объем (число больше 0):');
+            await ctx.reply('Пожалуйста, введите корректный объем (число больше 0, например: 0.15):');
             return;
           }
           this.stateService.setState(userId, { ...state, volume, step: 'price' });
@@ -169,9 +173,11 @@ export class TelegramService {
           break;
 
         case 'price':
-          const price = parseFloat(text);
+          let priceStr = text.replace(/\s+/g, '').replace(',', '.');
+          priceStr = priceStr.replace(/[^\d.]/g, '');
+          const price = parseFloat(priceStr);
           if (isNaN(price) || price <= 0) {
-            await ctx.reply('Пожалуйста, введите корректную стоимость (число больше 0):');
+            await ctx.reply('Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):');
             return;
           }
           this.stateService.setState(userId, { ...state, price, step: 'description' });
