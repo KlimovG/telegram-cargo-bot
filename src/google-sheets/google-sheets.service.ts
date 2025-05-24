@@ -41,41 +41,115 @@ export class GoogleSheetsService {
     }
   }
 
-  async calculateDelivery(params: {
-    type: 'cargo' | 'white';
+  /**
+   * Копирует последнюю строку листа 'Расчет' (с формулами) в новую строку,
+   * затем перезаписывает значения пользователя в нужные ячейки.
+   * Возвращает номер новой строки.
+   */
+  async addCalculationWithFormulaCopy({
+    type,
+    weight,
+    volume,
+    price,
+  }: {
+    type: string;
     weight: number;
     volume: number;
     price: number;
-    description: string;
-  }) {
+  }): Promise<number> {
     try {
-      const values = [
-        params.type,
-        params.weight,
-        params.volume,
-        params.price,
-        params.description
-      ];
-
-      await this.sheets.spreadsheets.values.update({
+      // 1. Получаем количество строк (чтобы узнать, куда вставлять новую строку)
+      const getRows = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Расчет!A2:E2',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [values] },
+        range: 'Расчет!A:A',
+      });
+      const rowCount = getRows.data.values ? getRows.data.values.length : 1;
+      // Новая строка всегда добавляется в конец
+      const newRow = rowCount + 1;
+
+      // 2. Копируем строку-образец (2-ю строку) в новую строку
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: this.spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              copyPaste: {
+                source: {
+                  sheetId: 600372163, // <-- sheetId листа 'Расчет', подставь свой gid
+                  startRowIndex: 1, // строка 2 (индексация с 0)
+                  endRowIndex: 2,
+                  startColumnIndex: 0,
+                  endColumnIndex: 21,
+                },
+                destination: {
+                  sheetId: 600372163, // <-- sheetId листа 'Расчет', подставь свой gid
+                  startRowIndex: newRow - 1,
+                  endRowIndex: newRow,
+                  startColumnIndex: 0,
+                  endColumnIndex: 21,
+                },
+                pasteType: 'PASTE_NORMAL',
+                pasteOrientation: 'NORMAL',
+              },
+            },
+          ],
+        },
       });
 
+      // 3. Перезаписываем значения пользователя в новой строке ТОЛЬКО в нужных ячейках, чтобы не затирать формулы
+      const now = new Date();
+      const date = now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+      const updates = [
+        { range: `Расчет!A${newRow}`, value: date },
+        { range: `Расчет!D${newRow}`, value: type },
+        { range: `Расчет!E${newRow}`, value: volume },
+        { range: `Расчет!G${newRow}`, value: weight },
+        { range: `Расчет!L${newRow}`, value: price },
+        // Столбец U не трогаем!
+      ];
+      for (const upd of updates) {
+        await this.sheets.spreadsheets.values.update({
+          spreadsheetId: this.spreadsheetId,
+          range: upd.range,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [[upd.value]] },
+        });
+      }
+      return newRow;
+    } catch (error) {
+      Logger.error('Ошибка при копировании строки и добавлении расчёта:', error);
+      throw error;
+    }
+  }
+
+  // Обновляю appendCalculation для использования новой логики
+  async appendCalculation({
+    type,
+    weight,
+    volume,
+    price,
+  }: {
+    type: string;
+    weight: number;
+    volume: number;
+    price: number;
+  }): Promise<number> {
+    return this.addCalculationWithFormulaCopy({ type, weight, volume, price });
+  }
+
+  /**
+   * Получает результат расчета из столбца U указанной строки
+   */
+  async getCalculationResult(rowNumber: number): Promise<string | null> {
+    try {
+      const range = `Расчет!U${rowNumber}`;
       const result = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Расчет!F2',
+        range,
       });
-      this.appendToHistory(result.data.values?.[0]?.[0]);
-      return {
-        success: true,
-        result: result.data.values?.[0]?.[0] || null,
-        params
-      };
+      return result.data.values?.[0]?.[0] || null;
     } catch (error) {
-      Logger.error('Ошибка при расчете доставки:', error);
+      Logger.error('Ошибка при получении результата расчета:', error);
       throw error;
     }
   }

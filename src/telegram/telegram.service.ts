@@ -19,10 +19,17 @@ export class TelegramService {
   async start(@Ctx() ctx: Context) {
     await ctx.reply(
       'Привет! Я бот для расчета стоимости доставки из Китая.\n\n' +
-      'Доступные команды:\n' +
-      '/calc - Рассчитать стоимость доставки\n' +
-      '/help - Показать справку\n' +
-      '/history - История ваших расчетов'
+      'Выберите команду:\n\n' +
+      '/calc - для расчета доставки',
+      {
+        reply_markup: {
+          keyboard: [
+            [{ text: '/calc' }]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: false
+        }
+      }
     );
   }
 
@@ -185,14 +192,19 @@ export class TelegramService {
 
   private async calculateAndShowResult(ctx: Context, userId: string, state: DeliveryState) {
     try {
-      const result = await this.sheetsService.calculateDelivery({
+      // 1. Добавляем строку и получаем её номер
+      const rowNumber = await this.sheetsService.appendCalculation({
         type: state.type,
         weight: state.weight!,
         volume: state.volume!,
-        price: state.price!,
-        description: state.description!,
+        price: state.price!
       });
 
+      // 2. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
+      await new Promise(res => setTimeout(res, 1000));
+      const result = await this.sheetsService.getCalculationResult(rowNumber);
+
+      // 3. Показываем результат пользователю
       await ctx.reply(
         `Расчет стоимости доставки:\n\n` +
         `Тип: ${state.type}\n` +
@@ -200,7 +212,7 @@ export class TelegramService {
         `Объем: ${state.volume}м³\n` +
         `Стоимость: ${state.price}¥\n` +
         `Описание: ${state.description}\n\n` +
-        `Итоговая стоимость: ${result.result}₽`
+        `Итоговая стоимость: ${result ?? 'не удалось получить результат'}₽`
       );
 
       this.stateService.clearState(userId);
