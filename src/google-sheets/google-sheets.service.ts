@@ -10,6 +10,7 @@ export class GoogleSheetsService {
   private readonly spreadsheetId: string;
   private fieldDictionary: FieldDictionary | null = null;
   private headers: string[] | null = null;
+  private readonly logger = new Logger(GoogleSheetsService.name);
 
   constructor(private configService: ConfigService) {
     const credentialsPath = this.configService.get<string>('google.credentialsPath');
@@ -73,7 +74,7 @@ export class GoogleSheetsService {
     if (this.headers) return this.headers;
     const headerRow = await this.sheets.spreadsheets.values.get({
       spreadsheetId: this.spreadsheetId,
-      range: 'Расчет!A1:U1',
+      range: 'Расчет!1:1',
     });
     this.headers = (headerRow.data.values && headerRow.data.values[0]) ? headerRow.data.values[0] : [];
     return this.headers;
@@ -156,6 +157,7 @@ export class GoogleSheetsService {
         const idx = headers.indexOf(dict[key].header);
         if (idx === -1) continue;
         const colLetter = String.fromCharCode('A'.charCodeAt(0) + idx);
+
         await this.sheets.spreadsheets.values.update({
           spreadsheetId: this.spreadsheetId,
           range: `Расчет!${colLetter}${newRow}`,

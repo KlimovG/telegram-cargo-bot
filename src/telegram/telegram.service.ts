@@ -142,7 +142,6 @@ export class TelegramService {
     }
 
     const userId = ctx.from.id.toString();
-    console.log('userId', userId);
     const state = this.stateService.getState(userId);
     const text = ctx.message.text;
 
