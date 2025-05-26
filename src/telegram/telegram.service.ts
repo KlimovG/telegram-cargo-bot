@@ -130,7 +130,8 @@ export class TelegramService {
     if (callbackData.startsWith('type_')) {
       const type = callbackData.replace('type_', '') as 'cargo' | 'white';
       this.stateService.setState(userId, { ...state, type, step: 'weight' });
-      await ctx.reply('Введите вес груза в килограммах:');
+      const hint = await this.sheetsService.getHintByKey('weight');
+      await ctx.reply(hint || 'Введите вес одной единицы в киллограммах:');
     }
   }
 
@@ -141,6 +142,7 @@ export class TelegramService {
     }
 
     const userId = ctx.from.id.toString();
+    console.log('userId', userId);
     const state = this.stateService.getState(userId);
     const text = ctx.message.text;
 
@@ -235,7 +237,10 @@ export class TelegramService {
 
   private async calculateAndShowResult(ctx: Context, userId: string, state: DeliveryState) {
     try {
-      // 1. Добавляем строку и получаем её номер
+      // 1. Сообщаем о начале расчета
+      const waitMsg = await ctx.reply('Выполняется расчет, пожалуйста, подождите...');
+
+      // 2. Добавляем строку и получаем её номер
       const rowNumber = await this.sheetsService.appendCalculation({
         type: state.type,
         weight: state.weight!,
@@ -245,15 +250,25 @@ export class TelegramService {
         count: state.count!,
       });
 
-      // 2. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
+      // 3. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
       await new Promise(res => setTimeout(res, 1000));
       const result = await this.sheetsService.getCalculationResult(rowNumber);
 
-      // 3. Показываем результат пользователю
+      // 4. Удаляем сообщение о расчете
+      if (waitMsg && 'message_id' in waitMsg) {
+        try {
+          await ctx.deleteMessage(waitMsg.message_id);
+        } catch (e) {
+          // Если не удалось удалить — ничего страшного
+        }
+      }
+
+      // 5. Показываем результат пользователю
       await ctx.reply(
         `Расчет стоимости доставки:\n\n` +
         `Тип: ${state.type}\n` +
         `Вес: ${state.weight}кг\n` +
+        `Количество: ${state.count}\n` +
         `Объем: ${state.volume}м³\n` +
         `Стоимость: ${state.price}¥\n` +
         `Описание: ${state.description}\n\n` +
