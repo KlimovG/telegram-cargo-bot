@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
 import * as path from 'path';
+import { AddCalculationParams } from './types';
 
 @Injectable()
 export class GoogleSheetsService {
@@ -46,17 +47,7 @@ export class GoogleSheetsService {
    * затем перезаписывает значения пользователя в нужные ячейки.
    * Возвращает номер новой строки.
    */
-  async addCalculationWithFormulaCopy({
-    type,
-    weight,
-    volume,
-    price,
-  }: {
-    type: string;
-    weight: number;
-    volume: number;
-    price: number;
-  }): Promise<number> {
+  async addCalculationWithFormulaCopy({ type, weight, volume, price }: AddCalculationParams): Promise<number> {
     try {
       // 1. Получаем количество строк (чтобы узнать, куда вставлять новую строку)
       const getRows = await this.sheets.spreadsheets.values.get({
@@ -105,7 +96,6 @@ export class GoogleSheetsService {
         { range: `Расчет!E${newRow}`, value: volume },
         { range: `Расчет!G${newRow}`, value: weight },
         { range: `Расчет!L${newRow}`, value: price },
-        // Столбец U не трогаем!
       ];
       for (const upd of updates) {
         await this.sheets.spreadsheets.values.update({
@@ -123,18 +113,8 @@ export class GoogleSheetsService {
   }
 
   // Обновляю appendCalculation для использования новой логики
-  async appendCalculation({
-    type,
-    weight,
-    volume,
-    price,
-  }: {
-    type: string;
-    weight: number;
-    volume: number;
-    price: number;
-  }): Promise<number> {
-    return this.addCalculationWithFormulaCopy({ type, weight, volume, price });
+  async appendCalculation(params: AddCalculationParams): Promise<number> {
+    return this.addCalculationWithFormulaCopy(params);
   }
 
   /**

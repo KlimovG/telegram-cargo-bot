@@ -3,7 +3,8 @@ import { Ctx, Start, Help, Command, Update, On, Message } from 'nestjs-telegraf'
 import { Context } from 'telegraf';
 import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { StateService } from './state.service';
-import { DeliveryState } from './types/delivery-state.interface';
+import { DeliveryState } from './types';
+import { AddCalculationParams } from '../google-sheets/types';
 
 @Update()
 @Injectable()
@@ -41,7 +42,8 @@ export class TelegramService {
       'Бот запросит у вас:\n' +
       '- Тип доставки (карго/белая)\n' +
       '- Вес груза (кг)\n' +
-      '- Объем (м³)\n' +
+      '- Объем единицы товара (м³)\n' +
+      '- Количество единиц товара\n' +
       '- Стоимость товара (юани)\n' +
       '- Описание товара'
     );
@@ -203,8 +205,8 @@ export class TelegramService {
         type: state.type,
         weight: state.weight!,
         volume: state.volume!,
-        price: state.price!
-      });
+        price: state.price!,
+      } as AddCalculationParams);
 
       // 2. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
       await new Promise(res => setTimeout(res, 1000));
