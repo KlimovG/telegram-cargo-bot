@@ -155,23 +155,54 @@ export class TelegramService {
           weightStr = weightStr.replace(/[^\d.]/g, '');
           const weight = parseFloat(weightStr);
           if (isNaN(weight) || weight <= 0) {
-            await ctx.reply('Пожалуйста, введите корректный вес (число больше 0, например: 12.5):');
+            const hint = await this.sheetsService.getHintByKey('weight');
+            await ctx.reply(hint || 'Пожалуйста, введите корректный вес (число больше 0, например: 12.5):');
             return;
           }
-          this.stateService.setState(userId, { ...state, weight, step: 'volume' });
-          await ctx.reply('Введите объем груза в м³:');
+          this.stateService.setState(userId, { ...state, weight, step: 'volumePerUnit' });
+          {
+            const hint = await this.sheetsService.getHintByKey('volumePerUnit');
+            await ctx.reply(hint || 'Введите объем единицы товара (м³):');
+          }
           break;
 
-        case 'volume':
-          let volumeStr = text.replace(/\s+/g, '').replace(',', '.');
-          volumeStr = volumeStr.replace(/[^\d.]/g, '');
-          const volume = parseFloat(volumeStr);
-          if (isNaN(volume) || volume <= 0) {
-            await ctx.reply('Пожалуйста, введите корректный объем (число больше 0, например: 0.15):');
+        case 'volumePerUnit':
+          let vpuStr = text.replace(/\s+/g, '').replace(',', '.');
+          vpuStr = vpuStr.replace(/[^\d.]/g, '');
+          const volumePerUnit = parseFloat(vpuStr);
+          if (isNaN(volumePerUnit) || volumePerUnit <= 0) {
+            const hint = await this.sheetsService.getHintByKey('volumePerUnit');
+            await ctx.reply(hint || 'Пожалуйста, введите корректный объем единицы товара (например: 0.15):');
             return;
           }
-          this.stateService.setState(userId, { ...state, volume, step: 'price' });
-          await ctx.reply('Введите стоимость товара в юанях:');
+          this.stateService.setState(userId, { ...state, volumePerUnit, step: 'count' });
+          {
+            const hint = await this.sheetsService.getHintByKey('count');
+            await ctx.reply(hint || 'Введите количество единиц товара:');
+          }
+          break;
+
+        case 'count':
+          let countStr = text.replace(/\s+/g, '');
+          countStr = countStr.replace(/[^\d]/g, '');
+          const count = parseInt(countStr, 10);
+          if (isNaN(count) || count <= 0) {
+            const hint = await this.sheetsService.getHintByKey('count');
+            await ctx.reply(hint || 'Пожалуйста, введите корректное количество (целое число больше 0):');
+            return;
+          }
+          // Вычисляем общий объем
+          const volume = (state.volumePerUnit || 0) * count;
+          if (isNaN(volume) || volume <= 0) {
+            await ctx.reply('Ошибка при вычислении общего объема. Попробуйте снова.');
+            this.stateService.clearState(userId);
+            return;
+          }
+          this.stateService.setState(userId, { ...state, count, volume, step: 'price' });
+          {
+            const hint = await this.sheetsService.getHintByKey('price');
+            await ctx.reply(hint || 'Введите стоимость товара в юанях:');
+          }
           break;
 
         case 'price':
@@ -179,11 +210,15 @@ export class TelegramService {
           priceStr = priceStr.replace(/[^\d.]/g, '');
           const price = parseFloat(priceStr);
           if (isNaN(price) || price <= 0) {
-            await ctx.reply('Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):');
+            const hint = await this.sheetsService.getHintByKey('price');
+            await ctx.reply(hint || 'Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):');
             return;
           }
           this.stateService.setState(userId, { ...state, price, step: 'description' });
-          await ctx.reply('Введите описание товара:');
+          {
+            const hint = await this.sheetsService.getHintByKey('description');
+            await ctx.reply(hint || 'Введите описание товара:');
+          }
           break;
 
         case 'description':
@@ -206,7 +241,9 @@ export class TelegramService {
         weight: state.weight!,
         volume: state.volume!,
         price: state.price!,
-      } as AddCalculationParams);
+        userTelegramId: userId,
+        count: state.count!,
+      });
 
       // 2. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
       await new Promise(res => setTimeout(res, 1000));

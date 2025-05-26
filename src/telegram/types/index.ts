@@ -4,5 +4,7 @@ export interface DeliveryState {
   volume?: number;
   price?: number;
   description?: string;
-  step: 'type' | 'weight' | 'volume' | 'price' | 'description' | 'complete';
+  volumePerUnit?: number;
+  count?: number;
+  step: 'type' | 'weight' | 'volumePerUnit' | 'count' | 'volume' | 'price' | 'description' | 'complete';
 } 

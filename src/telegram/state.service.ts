@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DeliveryState } from './types/delivery-state.interface';
+import { DeliveryState } from './types';
 
 @Injectable()
 export class StateService {
