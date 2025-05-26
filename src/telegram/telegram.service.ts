@@ -85,17 +85,29 @@ export class TelegramService {
       return;
     }
 
+    const userId = ctx.from.id.toString();
+    // Удаляем все предыдущие сообщения бота
+    const oldMessages = this.stateService.getAndClearBotMessages(userId);
+    for (const msgId of oldMessages) {
+      try { await ctx.deleteMessage(msgId); } catch (e) {}
+    }
+
     // 1. Сообщаем о начале получения истории
     const waitMsg = await ctx.reply('Получение истории обращений...');
+    if (waitMsg && 'message_id' in waitMsg) {
+      this.stateService.addBotMessage(userId, waitMsg.message_id);
+    }
 
-    const userId = ctx.from.id.toString();
     try {
       const { headers, userRows } = await this.sheetsService.getUserHistory(userId);
       if (userRows.length === 0) {
         if (waitMsg && 'message_id' in waitMsg) {
           try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
         }
-        await ctx.reply('У вас пока нет истории расчетов.');
+        const sent = await ctx.reply('У вас пока нет истории расчетов.');
+        if ('message_id' in sent) {
+          this.stateService.addBotMessage(userId, sent.message_id);
+        }
         return;
       }
 
@@ -123,13 +135,19 @@ export class TelegramService {
       if (waitMsg && 'message_id' in waitMsg) {
         try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
       }
-      await ctx.reply(message);
+      const sent = await ctx.reply(message);
+      if ('message_id' in sent) {
+        this.stateService.addBotMessage(userId, sent.message_id);
+      }
     } catch (error) {
       this.logger.error('Error fetching history:', error);
       if (waitMsg && 'message_id' in waitMsg) {
         try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
       }
-      await ctx.reply('Произошла ошибка при получении истории.');
+      const sent = await ctx.reply('Произошла ошибка при получении истории.');
+      if ('message_id' in sent) {
+        this.stateService.addBotMessage(userId, sent.message_id);
+      }
     }
   }
 
@@ -269,8 +287,17 @@ export class TelegramService {
 
   private async calculateAndShowResult(ctx: Context, userId: string, state: DeliveryState) {
     try {
+      // Удаляем все предыдущие сообщения бота
+      const oldMessages = this.stateService.getAndClearBotMessages(userId);
+      for (const msgId of oldMessages) {
+        try { await ctx.deleteMessage(msgId); } catch (e) {}
+      }
+
       // 1. Сообщаем о начале расчета
       const waitMsg = await ctx.reply('Выполняется расчет, пожалуйста, подождите...');
+      if (waitMsg && 'message_id' in waitMsg) {
+        this.stateService.addBotMessage(userId, waitMsg.message_id);
+      }
 
       // 2. Добавляем строку и получаем её номер
       const rowNumber = await this.sheetsService.appendCalculation({
@@ -296,7 +323,7 @@ export class TelegramService {
       }
 
       // 5. Показываем результат пользователю
-      await ctx.reply(
+      const sent = await ctx.reply(
         `Расчет стоимости доставки:\n\n` +
         `Тип: ${state.type}\n` +
         `Вес: ${state.weight}кг\n` +
@@ -316,11 +343,17 @@ export class TelegramService {
           }
         }
       );
+      if ('message_id' in sent) {
+        this.stateService.addBotMessage(userId, sent.message_id);
+      }
 
       this.stateService.clearState(userId);
     } catch (error) {
       this.logger.error('Error calculating delivery:', error);
-      await ctx.reply('Произошла ошибка при расчете стоимости. Пожалуйста, попробуйте позже.');
+      const sent = await ctx.reply('Произошла ошибка при расчете стоимости. Пожалуйста, попробуйте позже.');
+      if ('message_id' in sent) {
+        this.stateService.addBotMessage(userId, sent.message_id);
+      }
       this.stateService.clearState(userId);
     }
   }
