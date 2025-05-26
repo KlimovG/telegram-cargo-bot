@@ -21,11 +21,12 @@ export class TelegramService {
     await ctx.reply(
       'Привет! Я бот для расчета стоимости доставки из Китая.\n\n' +
       'Выберите команду:\n\n' +
-      '/calc - для расчета доставки',
+      '/calc - для расчета доставки\n\n'+
+      '/history - посмотреть историю расчетов',
       {
         reply_markup: {
           keyboard: [
-            [{ text: '/calc' }],
+            [{ text: '/calc' }, { text: '/history' }],
           ],
           resize_keyboard: true,
           one_time_keyboard: false
@@ -84,17 +85,32 @@ export class TelegramService {
       return;
     }
 
+    // 1. Сообщаем о начале получения истории
+    const waitMsg = await ctx.reply('Получение истории обращений...');
+
     const userId = ctx.from.id.toString();
     try {
-      const history = await this.sheetsService.getUserHistory(userId);
-      if (history.length === 0) {
+      const { headers, userRows } = await this.sheetsService.getUserHistory(userId);
+      if (userRows.length === 0) {
+        if (waitMsg && 'message_id' in waitMsg) {
+          try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
+        }
         await ctx.reply('У вас пока нет истории расчетов.');
         return;
       }
 
-      const message = history
+      // Получаем справочник для поиска индексов
+      const dict = await this.sheetsService['loadFieldDictionary']();
+      const getIdx = (key: string) => headers.indexOf(dict[key]?.header);
+      
+      const message = userRows
         .map((row, index) => {
-          const [date, _, type, weight, volume, price, description, result] = row;
+          const date = row[getIdx('date')];
+          const type = row[getIdx('type')];
+          const weight = row[getIdx('weight')];
+          const volume = row[getIdx('volume')];
+          const price = row[getIdx('price')];
+          const result = row[getIdx('result')];
           return `${index + 1}. ${date}\n` +
                  `Тип: ${type}\n` +
                  `Вес: ${weight}кг\n` +
@@ -104,9 +120,15 @@ export class TelegramService {
         })
         .join('\n');
 
+      if (waitMsg && 'message_id' in waitMsg) {
+        try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
+      }
       await ctx.reply(message);
     } catch (error) {
       this.logger.error('Error fetching history:', error);
+      if (waitMsg && 'message_id' in waitMsg) {
+        try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
+      }
       await ctx.reply('Произошла ошибка при получении истории.');
     }
   }
@@ -121,6 +143,17 @@ export class TelegramService {
     const callbackData = ctx.callbackQuery.data;
     const userId = ctx.from.id.toString();
     const state = this.stateService.getState(userId);
+
+    // Обработка новых кнопок
+    if (callbackData === 'start_over') {
+      this.stateService.clearState(userId);
+      await this.calc(ctx);
+      return;
+    }
+    if (callbackData === 'show_history') {
+      await this.history(ctx);
+      return;
+    }
 
     if (!state) {
       await ctx.reply('Пожалуйста, начните расчет заново с помощью команды /calc');
@@ -271,7 +304,17 @@ export class TelegramService {
         `Объем: ${state.volume}м³\n` +
         `Стоимость: ${state.price}¥\n` +
         `Описание: ${state.description}\n\n` +
-        `Итоговая стоимость: ${result ?? 'не удалось получить результат'}₽`
+        `Итоговая стоимость: ${result ?? 'не удалось получить результат'}₽`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: 'Начать сначала', callback_data: 'start_over' },
+                { text: 'История расчетов', callback_data: 'show_history' }
+              ]
+            ]
+          }
+        }
       );
 
       this.stateService.clearState(userId);

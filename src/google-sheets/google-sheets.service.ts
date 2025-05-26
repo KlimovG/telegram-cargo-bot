@@ -28,23 +28,6 @@ export class GoogleSheetsService {
     this.spreadsheetId = spreadsheetId;
   }
 
-  async appendToHistory(values: any[]) {
-    try {
-      const timestamp = new Date().toISOString();
-      const rowData = [timestamp, ...values];
-      
-      await this.sheets.spreadsheets.values.append({
-        spreadsheetId: this.spreadsheetId,
-        range: 'История!A1',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [rowData] },
-      });
-    } catch (error) {
-      Logger.error('Ошибка при добавлении в историю:', error);
-      throw error;
-    }
-  }
-
   /**
    * Читает справочник из листа "Справочник" и строит объект соответствия
    */
@@ -197,11 +180,21 @@ export class GoogleSheetsService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'История!A:F',
+        range: 'Расчет', // все строки и столбцы
       });
-
       const rows = response.data.values || [];
-      return rows.filter(row => row[1] === userId);
+      if (rows.length < 2) return { headers: [], userRows: [] };
+
+      const headers = rows[0];
+      const dict = await this.loadFieldDictionary();
+      const userIdColIdx = headers.indexOf(dict['userTelegramId']?.header);
+      if (userIdColIdx === -1) {
+        throw new Error('Столбец userTelegramId не найден');
+      }
+
+      // Фильтруем строки по userId (начиная со 2-й строки)
+      const userRows = rows.slice(1).filter(row => Number(row[userIdColIdx]) === Number(userId));
+      return { headers, userRows };
     } catch (error) {
       Logger.error('Ошибка при получении истории:', error);
       throw error;
