@@ -8,15 +8,16 @@ import { AddCalculationParams, FieldDictionary, FieldDictionaryEntry } from './t
 export class GoogleSheetsService {
   private sheets: sheets_v4.Sheets;
   private readonly spreadsheetId: string;
+  private readonly sheetId: number;
   private fieldDictionary: FieldDictionary | null = null;
   private headers: string[] | null = null;
-  private readonly logger = new Logger(GoogleSheetsService.name);
 
   constructor(private configService: ConfigService) {
     const credentialsPath = this.configService.get<string>('google.credentialsPath');
     const spreadsheetId = this.configService.get<string>('google.spreadsheetId');
+    const sheetId = this.configService.get<string>('google.sheetId');
 
-    if (!credentialsPath || !spreadsheetId) {
+    if (!credentialsPath || !spreadsheetId || !sheetId) {
       throw new Error('Google Sheets configuration is incomplete');
     }
 
@@ -26,6 +27,7 @@ export class GoogleSheetsService {
     });
     this.sheets = google.sheets({ version: 'v4', auth });
     this.spreadsheetId = spreadsheetId;
+    this.sheetId = Number(sheetId);
   }
 
   /**
@@ -64,19 +66,6 @@ export class GoogleSheetsService {
   }
 
   /**
-   * Возвращает индекс столбца по ключу из справочника
-   */
-  private async getColumnIndexByKey(key: string): Promise<number> {
-    const dict = await this.loadFieldDictionary();
-    const headers = await this.loadHeaders();
-    const entry = dict[key];
-    if (!entry) throw new Error(`Нет ключа ${key} в справочнике`);
-    const idx = headers.indexOf(entry.header);
-    if (idx === -1) throw new Error(`Заголовок ${entry.header} не найден в главной таблице`);
-    return idx;
-  }
-
-  /**
    * Возвращает подсказку для бота по ключу
    */
   public async getHintByKey(key: string): Promise<string | undefined> {
@@ -106,14 +95,14 @@ export class GoogleSheetsService {
             {
               copyPaste: {
                 source: {
-                  sheetId: 600372163, // <-- sheetId листа 'Расчет', подставь свой gid
+                  sheetId: this.sheetId,
                   startRowIndex: 1, // строка 2 (индексация с 0)
                   endRowIndex: 2,
                   startColumnIndex: 0,
                   endColumnIndex: 21,
                 },
                 destination: {
-                  sheetId: 600372163, // <-- sheetId листа 'Расчет', подставь свой gid
+                  sheetId: this.sheetId,
                   startRowIndex: newRow - 1,
                   endRowIndex: newRow,
                   startColumnIndex: 0,
