@@ -3,6 +3,7 @@ import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { StateService } from './state.service';
 import { MessageBuilder } from './utils/message.builder';
 import { DeliveryState, DeliveryStep, DeliveryStepHandleData, DeliveryStepResult } from './types';
+import { Context } from 'telegraf';
 
 @Injectable()
 export class TelegramBotFacade {
@@ -196,5 +197,72 @@ export class TelegramBotFacade {
             message: '',
             newState,
         };
+    }
+
+    async processCalculation(ctx: Context, userId: string, state: DeliveryState): Promise<void> {
+        try {
+            // Удаляем все предыдущие сообщения бота
+            const oldMessages = this.getAndClearBotMessages(userId);
+            for (const msgId of oldMessages) {
+                try { await ctx.deleteMessage(msgId); } catch (e) {}
+            }
+
+            // 1. Сообщаем о начале расчета
+            const waitMsg = await ctx.reply('Выполняется расчет, пожалуйста, подождите...');
+            if (waitMsg && 'message_id' in waitMsg) {
+                this.addBotMessage(userId, waitMsg.message_id);
+            }
+
+            // 2. Добавляем строку и получаем её номер
+            const rowNumber = await this.appendCalculation({
+                type: state.type,
+                weight: state.weight!,
+                volume: state.volume!,
+                price: state.price!,
+                userTelegramId: userId,
+                count: state.count!,
+            });
+
+            // 3. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
+            await new Promise(res => setTimeout(res, 1000));
+            const result = await this.getCalculationResult(rowNumber);
+
+            // 4. Удаляем сообщение о расчете
+            if (waitMsg && 'message_id' in waitMsg) {
+                try {
+                    await ctx.deleteMessage(waitMsg.message_id);
+                } catch (e) {
+                    // Если не удалось удалить — ничего страшного
+                }
+            }
+
+            // 5. Показываем результат пользователю
+            const message = await this.buildCalculationResultMessage(state, result);
+            const sent = await ctx.reply(
+                message,
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: 'Начать сначала', callback_data: 'start_over' },
+                                { text: 'История расчетов', callback_data: 'show_history' }
+                            ]
+                        ]
+                    }
+                }
+            );
+            if ('message_id' in sent) {
+                this.addBotMessage(userId, sent.message_id);
+            }
+
+            this.clearState(userId);
+        } catch (error) {
+            // Можно пробросить ошибку или обработать здесь
+            const sent = await ctx.reply('Произошла ошибка при расчете стоимости. Пожалуйста, попробуйте позже.');
+            if ('message_id' in sent) {
+                this.addBotMessage(userId, sent.message_id);
+            }
+            this.clearState(userId);
+        }
     }
 } 
