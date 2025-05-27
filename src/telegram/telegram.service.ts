@@ -320,15 +320,18 @@ export class TelegramService {
       }
 
       // 5. Показываем результат пользователю
+      const builder = new MessageBuilder();
+      builder.addLine('Расчет стоимости доставки:')
+        .addField('Тип', state.type)
+        .addField('Вес', state.weight, 'кг')
+        .addField('Количество', state.count)
+        .addField('Объем', state.volume, 'м³')
+        .addField('Стоимость', state.price, '¥')
+        .addField('Описание', state.description)
+        .addLine('')
+        .addField('Итоговая стоимость', result ?? 'не удалось получить результат', '₽');
       const sent = await ctx.reply(
-        `Расчет стоимости доставки:\n\n` +
-        `Тип: ${state.type}\n` +
-        `Вес: ${state.weight}кг\n` +
-        `Количество: ${state.count}\n` +
-        `Объем: ${state.volume}м³\n` +
-        `Стоимость: ${state.price}¥\n` +
-        `Описание: ${state.description}\n\n` +
-        `Итоговая стоимость: ${result ?? 'не удалось получить результат'}₽`,
+        builder.build(),
         {
           reply_markup: {
             inline_keyboard: [
