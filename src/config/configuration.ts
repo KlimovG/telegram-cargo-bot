@@ -3,7 +3,8 @@ export default () => ({
     token: process.env.TELEGRAM_BOT_TOKEN,
   },
   google: {
-    spreadsheetId: process.env.GOOGLE_SHEETS_ID,
-    credentialsPath: process.env.GOOGLE_CREDENTIALS_PATH || 'credentials.json',
+    spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID,
+    sheetId: process.env.GOOGLE_SHEET_ID,
+    credentialsPath: process.env.GOOGLE_CREDENTIALS_PATH
   },
 }); 
