@@ -6,8 +6,8 @@ import { TelegramBotFacade } from './telegram-bot.facade';
 
 @Update()
 @Injectable()
-export class TelegramService {
-  private readonly logger = new Logger(TelegramService.name);
+export class TelegramControllerService {
+  private readonly logger = new Logger(TelegramControllerService.name);
 
   constructor(
     private readonly botFacade: TelegramBotFacade,

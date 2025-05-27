@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, sheets_v4 } from 'googleapis';
 import * as path from 'path';
-import { AddCalculationParams, FieldDictionary, FieldDictionaryEntry } from './types';
+import { FieldDictionary } from './types';
 
 @Injectable()
 export class GoogleSheetsService {

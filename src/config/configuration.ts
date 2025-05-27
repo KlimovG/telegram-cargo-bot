@@ -5,6 +5,6 @@ export default () => ({
   google: {
     spreadsheetId: process.env.GOOGLE_SPREADSHEET_ID,
     sheetId: process.env.GOOGLE_SHEET_ID,
-    credentialsPath: process.env.GOOGLE_CREDENTIALS_PATH || 'credentials.json',
+    credentialsPath: process.env.GOOGLE_CREDENTIALS_PATH
   },
 }); 
