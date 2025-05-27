@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Ctx, Start, Help, Command, Update, On, Message } from 'nestjs-telegraf';
+import { Ctx, Start, Help, Command, Update, On } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { TelegramBotFacade } from './telegram-bot.facade';
-import { DeliveryState } from './types';
+
 
 @Update()
 @Injectable()
@@ -175,7 +175,7 @@ export class TelegramService {
         this.botFacade.setState(userId, stepResult.newState);
       }
       if (stepResult.complete && stepResult.newState) {
-        await this.calculateAndShowResult(ctx, userId, stepResult.newState);
+        await this.botFacade.processCalculation(ctx, userId, stepResult.newState);
         return;
       }
       if (stepResult.message) {
@@ -186,9 +186,5 @@ export class TelegramService {
       await ctx.reply('Произошла ошибка при обработке данных. Пожалуйста, начните заново с /calc');
       this.botFacade.clearState(userId);
     }
-  }
-
-  private async calculateAndShowResult(ctx: Context, userId: string, state: DeliveryState) {
-    await this.botFacade.processCalculation(ctx, userId, state);
   }
 }
