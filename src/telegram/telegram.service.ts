@@ -1,11 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Ctx, Start, Help, Command, Update, On, Message } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
-import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
-import { StateService } from './state.service';
+import { TelegramBotFacade } from './telegram-bot.facade';
 import { DeliveryState } from './types';
-import { AddCalculationParams } from '../google-sheets/types';
-import { MessageBuilder } from './utils/message.builder';
 
 @Update()
 @Injectable()
@@ -13,8 +10,7 @@ export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
 
   constructor(
-    private readonly sheetsService: GoogleSheetsService,
-    private readonly stateService: StateService,
+    private readonly botFacade: TelegramBotFacade,
   ) {}
 
   @Start()
@@ -59,7 +55,7 @@ export class TelegramService {
     }
 
     const userId = ctx.from.id.toString();
-    this.stateService.setState(userId, {
+    this.botFacade.setState(userId, {
       type: 'cargo',
       step: 'type'
     });
@@ -88,7 +84,7 @@ export class TelegramService {
 
     const userId = ctx.from.id.toString();
     // Удаляем все предыдущие сообщения бота
-    const oldMessages = this.stateService.getAndClearBotMessages(userId);
+    const oldMessages = this.botFacade.getAndClearBotMessages(userId);
     for (const msgId of oldMessages) {
       try { await ctx.deleteMessage(msgId); } catch (e) {}
     }
@@ -96,45 +92,17 @@ export class TelegramService {
     // 1. Сообщаем о начале получения истории
     const waitMsg = await ctx.reply('Получение истории обращений...');
     if (waitMsg && 'message_id' in waitMsg) {
-      this.stateService.addBotMessage(userId, waitMsg.message_id);
+      this.botFacade.addBotMessage(userId, waitMsg.message_id);
     }
 
     try {
-      const { headers, userRows } = await this.sheetsService.getUserHistory(userId);
-      if (userRows.length === 0) {
-        if (waitMsg && 'message_id' in waitMsg) {
-          try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
-        }
-        const sent = await ctx.reply('У вас пока нет истории расчетов.');
-        if ('message_id' in sent) {
-          this.stateService.addBotMessage(userId, sent.message_id);
-        }
-        return;
-      }
-
-      // Получаем справочник для поиска индексов
-      const dict = await this.sheetsService['loadFieldDictionary']();
-      const getIdx = (key: string) => headers.indexOf(dict[key]?.header);
-      
-      const message = userRows
-        .map((row, index) => {
-          const builder = new MessageBuilder();
-          builder.addLine(`${index + 1}. ${row[getIdx('date')]}`)
-            .addField('Тип', row[getIdx('type')])
-            .addField('Вес', row[getIdx('weight')], 'кг')
-            .addField('Объем', row[getIdx('volume')], 'м³')
-            .addField('Цена', row[getIdx('price')], '¥')
-            .addField('Результат', row[getIdx('result')], '₽');
-          return builder.build();
-        })
-        .join('\n');
-
+      const message = await this.botFacade.buildHistoryMessage(userId);
       if (waitMsg && 'message_id' in waitMsg) {
         try { await ctx.deleteMessage(waitMsg.message_id); } catch (e) {}
       }
       const sent = await ctx.reply(message);
       if ('message_id' in sent) {
-        this.stateService.addBotMessage(userId, sent.message_id);
+        this.botFacade.addBotMessage(userId, sent.message_id);
       }
     } catch (error) {
       this.logger.error('Error fetching history:', error);
@@ -143,7 +111,7 @@ export class TelegramService {
       }
       const sent = await ctx.reply('Произошла ошибка при получении истории.');
       if ('message_id' in sent) {
-        this.stateService.addBotMessage(userId, sent.message_id);
+        this.botFacade.addBotMessage(userId, sent.message_id);
       }
     }
   }
@@ -157,11 +125,11 @@ export class TelegramService {
 
     const callbackData = ctx.callbackQuery.data;
     const userId = ctx.from.id.toString();
-    const state = this.stateService.getState(userId);
+    const state = this.botFacade.getState(userId);
 
     // Обработка новых кнопок
     if (callbackData === 'start_over') {
-      this.stateService.clearState(userId);
+      this.botFacade.clearState(userId);
       await this.calc(ctx);
       return;
     }
@@ -177,8 +145,8 @@ export class TelegramService {
 
     if (callbackData.startsWith('type_')) {
       const type = callbackData.replace('type_', '') as 'cargo' | 'white';
-      this.stateService.setState(userId, { ...state, type, step: 'weight' });
-      const hint = await this.sheetsService.getHintByKey('weight');
+      this.botFacade.setState(userId, { ...state, type, step: 'weight' });
+      const hint = await this.botFacade.getHintByKey('weight');
       await ctx.reply(hint || 'Введите вес одной единицы в киллограммах:');
     }
   }
@@ -190,7 +158,7 @@ export class TelegramService {
     }
 
     const userId = ctx.from.id.toString();
-    const state = this.stateService.getState(userId);
+    const state = this.botFacade.getState(userId);
     const text = ctx.message.text;
 
     if (!state) {
@@ -198,94 +166,32 @@ export class TelegramService {
     }
 
     try {
-      switch (state.step) {
-        case 'weight':
-          let weightStr = text.replace(/\s+/g, '').replace(',', '.');
-          weightStr = weightStr.replace(/[^\d.]/g, '');
-          const weight = parseFloat(weightStr);
-          if (isNaN(weight) || weight <= 0) {
-            const hint = await this.sheetsService.getHintByKey('weight');
-            await ctx.reply(hint || 'Пожалуйста, введите корректный вес (число больше 0, например: 12.5):');
-            return;
-          }
-          this.stateService.setState(userId, { ...state, weight, step: 'volumePerUnit' });
-          {
-            const hint = await this.sheetsService.getHintByKey('volumePerUnit');
-            await ctx.reply(hint || 'Введите объем единицы товара (м³):');
-          }
-          break;
-
-        case 'volumePerUnit':
-          let vpuStr = text.replace(/\s+/g, '').replace(',', '.');
-          vpuStr = vpuStr.replace(/[^\d.]/g, '');
-          const volumePerUnit = parseFloat(vpuStr);
-          if (isNaN(volumePerUnit) || volumePerUnit <= 0) {
-            const hint = await this.sheetsService.getHintByKey('volumePerUnit');
-            await ctx.reply(hint || 'Пожалуйста, введите корректный объем единицы товара (например: 0.15):');
-            return;
-          }
-          this.stateService.setState(userId, { ...state, volumePerUnit, step: 'count' });
-          {
-            const hint = await this.sheetsService.getHintByKey('count');
-            await ctx.reply(hint || 'Введите количество единиц товара:');
-          }
-          break;
-
-        case 'count':
-          let countStr = text.replace(/\s+/g, '');
-          countStr = countStr.replace(/[^\d]/g, '');
-          const count = parseInt(countStr, 10);
-          if (isNaN(count) || count <= 0) {
-            const hint = await this.sheetsService.getHintByKey('count');
-            await ctx.reply(hint || 'Пожалуйста, введите корректное количество (целое число больше 0):');
-            return;
-          }
-          // Вычисляем общий объем
-          const volume = (state.volumePerUnit || 0) * count;
-          if (isNaN(volume) || volume <= 0) {
-            await ctx.reply('Ошибка при вычислении общего объема. Попробуйте снова.');
-            this.stateService.clearState(userId);
-            return;
-          }
-          this.stateService.setState(userId, { ...state, count, volume, step: 'price' });
-          {
-            const hint = await this.sheetsService.getHintByKey('price');
-            await ctx.reply(hint || 'Введите стоимость товара в юанях:');
-          }
-          break;
-
-        case 'price':
-          let priceStr = text.replace(/\s+/g, '').replace(',', '.');
-          priceStr = priceStr.replace(/[^\d.]/g, '');
-          const price = parseFloat(priceStr);
-          if (isNaN(price) || price <= 0) {
-            const hint = await this.sheetsService.getHintByKey('price');
-            await ctx.reply(hint || 'Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):');
-            return;
-          }
-          this.stateService.setState(userId, { ...state, price, step: 'description' });
-          {
-            const hint = await this.sheetsService.getHintByKey('description');
-            await ctx.reply(hint || 'Введите описание товара:');
-          }
-          break;
-
-        case 'description':
-          this.stateService.setState(userId, { ...state, description: text, step: 'complete' });
-          await this.calculateAndShowResult(ctx, userId, { ...state, description: text });
-          break;
+      const stepResult = await this.botFacade.handleStep({ step: state.step, text, state});
+      if (!stepResult.valid) {
+        await ctx.reply(stepResult.message);
+        return;
+      }
+      if (stepResult.newState) {
+        this.botFacade.setState(userId, stepResult.newState);
+      }
+      if (stepResult.complete && stepResult.newState) {
+        await this.calculateAndShowResult(ctx, userId, stepResult.newState);
+        return;
+      }
+      if (stepResult.message) {
+        await ctx.reply(stepResult.message);
       }
     } catch (error) {
       this.logger.error('Error processing input:', error);
       await ctx.reply('Произошла ошибка при обработке данных. Пожалуйста, начните заново с /calc');
-      this.stateService.clearState(userId);
+      this.botFacade.clearState(userId);
     }
   }
 
   private async calculateAndShowResult(ctx: Context, userId: string, state: DeliveryState) {
     try {
       // Удаляем все предыдущие сообщения бота
-      const oldMessages = this.stateService.getAndClearBotMessages(userId);
+      const oldMessages = this.botFacade.getAndClearBotMessages(userId);
       for (const msgId of oldMessages) {
         try { await ctx.deleteMessage(msgId); } catch (e) {}
       }
@@ -293,11 +199,11 @@ export class TelegramService {
       // 1. Сообщаем о начале расчета
       const waitMsg = await ctx.reply('Выполняется расчет, пожалуйста, подождите...');
       if (waitMsg && 'message_id' in waitMsg) {
-        this.stateService.addBotMessage(userId, waitMsg.message_id);
+        this.botFacade.addBotMessage(userId, waitMsg.message_id);
       }
 
       // 2. Добавляем строку и получаем её номер
-      const rowNumber = await this.sheetsService.appendCalculation({
+      const rowNumber = await this.botFacade.appendCalculation({
         type: state.type,
         weight: state.weight!,
         volume: state.volume!,
@@ -308,7 +214,7 @@ export class TelegramService {
 
       // 3. Ждём, чтобы формула успела посчитать (можно увеличить при необходимости)
       await new Promise(res => setTimeout(res, 1000));
-      const result = await this.sheetsService.getCalculationResult(rowNumber);
+      const result = await this.botFacade.getCalculationResult(rowNumber);
 
       // 4. Удаляем сообщение о расчете
       if (waitMsg && 'message_id' in waitMsg) {
@@ -320,18 +226,9 @@ export class TelegramService {
       }
 
       // 5. Показываем результат пользователю
-      const builder = new MessageBuilder();
-      builder.addLine('Расчет стоимости доставки:')
-        .addField('Тип', state.type)
-        .addField('Вес', state.weight, 'кг')
-        .addField('Количество', state.count)
-        .addField('Объем', state.volume, 'м³')
-        .addField('Стоимость', state.price, '¥')
-        .addField('Описание', state.description)
-        .addLine('')
-        .addField('Итоговая стоимость', result ?? 'не удалось получить результат', '₽');
+      const message = await this.botFacade.buildCalculationResultMessage(state, result);
       const sent = await ctx.reply(
-        builder.build(),
+        message,
         {
           reply_markup: {
             inline_keyboard: [
@@ -344,17 +241,17 @@ export class TelegramService {
         }
       );
       if ('message_id' in sent) {
-        this.stateService.addBotMessage(userId, sent.message_id);
+        this.botFacade.addBotMessage(userId, sent.message_id);
       }
 
-      this.stateService.clearState(userId);
+      this.botFacade.clearState(userId);
     } catch (error) {
       this.logger.error('Error calculating delivery:', error);
       const sent = await ctx.reply('Произошла ошибка при расчете стоимости. Пожалуйста, попробуйте позже.');
       if ('message_id' in sent) {
-        this.stateService.addBotMessage(userId, sent.message_id);
+        this.botFacade.addBotMessage(userId, sent.message_id);
       }
-      this.stateService.clearState(userId);
+      this.botFacade.clearState(userId);
     }
   }
 }
