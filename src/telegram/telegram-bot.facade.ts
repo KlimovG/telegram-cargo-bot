@@ -4,12 +4,14 @@ import { StateService } from './state.service';
 import { MessageBuilder } from './utils/message.builder';
 import { DeliveryState, DeliveryStep, DeliveryStepHandleData, DeliveryStepResult } from './types';
 import { Context } from 'telegraf';
+import { DeliveryValidationService } from './delivery-validation.service';
 
 @Injectable()
 export class TelegramBotFacade {
     constructor(
         private readonly sheetsService: GoogleSheetsService,
         private readonly stateService: StateService,
+        private readonly validationService: DeliveryValidationService,
     ) { }
 
     // StateService facade
@@ -100,17 +102,15 @@ export class TelegramBotFacade {
     }
 
     private async handleWeightStep(text: string, state: DeliveryState): Promise<DeliveryStepResult> {
-        let weightStr = text.replace(/\s+/g, '').replace(',', '.');
-        weightStr = weightStr.replace(/[^\d.]/g, '');
-        const weight = parseFloat(weightStr);
-        if (isNaN(weight) || weight <= 0) {
+        const { valid, value, error } = await this.validationService.validateWeight(text);
+        if (!valid) {
             const hint = await this.sheetsService.getHintByKey('weight');
             return {
                 valid: false,
-                message: hint || 'Пожалуйста, введите корректный вес (число больше 0, например: 12.5):',
+                message: hint || error || 'Пожалуйста, введите корректный вес (число больше 0, например: 12.5):',
             };
         }
-        const newState: DeliveryState = { ...state, weight, step: 'volumePerUnit' };
+        const newState: DeliveryState = { ...state, weight: value, step: 'volumePerUnit' };
         const hint = await this.sheetsService.getHintByKey('volumePerUnit');
         return {
             valid: true,
@@ -121,17 +121,15 @@ export class TelegramBotFacade {
     }
 
     private async handleVolumeStep(text: string, state: DeliveryState): Promise<DeliveryStepResult> {
-        let vpuStr = text.replace(/\s+/g, '').replace(',', '.');
-        vpuStr = vpuStr.replace(/[^\d.]/g, '');
-        const volumePerUnit = parseFloat(vpuStr);
-        if (isNaN(volumePerUnit) || volumePerUnit <= 0) {
+        const { valid, value, error } = await this.validationService.validateVolumePerUnit(text);
+        if (!valid) {
             const hint = await this.sheetsService.getHintByKey('volumePerUnit');
             return {
                 valid: false,
-                message: hint || 'Пожалуйста, введите корректный объем единицы товара (например: 0.15):',
+                message: hint || error || 'Пожалуйста, введите корректный объем единицы товара (например: 0.15):',
             };
         }
-        const newState: DeliveryState = { ...state, volumePerUnit, step: 'count' };
+        const newState: DeliveryState = { ...state, volumePerUnit: value, step: 'count' };
         const hint = await this.sheetsService.getHintByKey('count');
         return {
             valid: true,
@@ -142,24 +140,22 @@ export class TelegramBotFacade {
     }
 
     private async handleCountStep(text: string, state: DeliveryState): Promise<DeliveryStepResult> {
-        let countStr = text.replace(/\s+/g, '');
-        countStr = countStr.replace(/[^\d]/g, '');
-        const count = parseInt(countStr, 10);
-        if (isNaN(count) || count <= 0) {
+        const { valid, value, error } = await this.validationService.validateCount(text);
+        if (!valid) {
             const hint = await this.sheetsService.getHintByKey('count');
             return {
                 valid: false,
-                message: hint || 'Пожалуйста, введите корректное количество (целое число больше 0):',
+                message: hint || error || 'Пожалуйста, введите корректное количество (целое число больше 0):',
             };
         }
-        const volume = (state.volumePerUnit || 0) * count;
+        const volume = (state.volumePerUnit || 0) * (value || 0);
         if (isNaN(volume) || volume <= 0) {
             return {
                 valid: false,
                 message: 'Ошибка при вычислении общего объема. Попробуйте снова.',
             };
         }
-        const newState: DeliveryState = { ...state, count, volume, step: 'price' };
+        const newState: DeliveryState = { ...state, count: value, volume, step: 'price' };
         const hint = await this.sheetsService.getHintByKey('price');
         return {
             valid: true,
@@ -170,17 +166,15 @@ export class TelegramBotFacade {
     }
 
     private async handlePriceStep(text: string, state: DeliveryState): Promise<DeliveryStepResult> {
-        let priceStr = text.replace(/\s+/g, '').replace(',', '.');
-        priceStr = priceStr.replace(/[^\d.]/g, '');
-        const price = parseFloat(priceStr);
-        if (isNaN(price) || price <= 0) {
+        const { valid, value, error } = await this.validationService.validatePrice(text);
+        if (!valid) {
             const hint = await this.sheetsService.getHintByKey('price');
             return {
                 valid: false,
-                message: hint || 'Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):',
+                message: hint || error || 'Пожалуйста, введите корректную стоимость (число больше 0, например: 1500):',
             };
         }
-        const newState: DeliveryState = { ...state, price, step: 'description' };
+        const newState: DeliveryState = { ...state, price: value, step: 'description' };
         const hint = await this.sheetsService.getHintByKey('description');
         return {
             valid: true,

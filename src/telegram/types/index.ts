@@ -26,3 +26,9 @@ export interface DeliveryStepHandleData {
   text: string,
   state: DeliveryState
 }
+
+export interface DeliveryValidationResult {
+  valid: boolean;
+  value?: number;
+  error?: string;
+}
