@@ -56,7 +56,8 @@ export class TelegramBotFacade {
                     .addField('Вес', row[getIdx('weight')], 'кг')
                     .addField('Объем', row[getIdx('volume')], 'м³')
                     .addField('Цена', row[getIdx('price')], '¥')
-                    .addField('Результат', row[getIdx('result')], '₽');
+                    .addField('Результат', row[getIdx('result')], '₽')
+                    .addLine();
                 return builder.build();
             })
             .join('\n');
@@ -71,7 +72,7 @@ export class TelegramBotFacade {
             .addField('Объем', state.volume, 'м³')
             .addField('Стоимость', state.price, '¥')
             .addField('Описание', state.description)
-            .addLine('')
+            .addLine()
             .addField('Итоговая стоимость', result ?? 'не удалось получить результат', '₽');
         return builder.build();
     }

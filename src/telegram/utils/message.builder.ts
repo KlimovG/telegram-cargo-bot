@@ -1,7 +1,7 @@
 export class MessageBuilder {
   private parts: string[] = [];
 
-  addLine(line: string) {
+  addLine(line: string = '') {
     this.parts.push(line);
     return this;
   }
