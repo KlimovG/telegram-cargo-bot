@@ -30,9 +30,6 @@ export class GoogleSheetsService {
     this.sheetId = Number(sheetId);
   }
 
-  /**
-   * Читает справочник из листа "Справочник" и строит объект соответствия
-   */
   private async loadFieldDictionary(): Promise<FieldDictionary> {
     if (this.fieldDictionary) return this.fieldDictionary;
     const dictRows = await this.sheets.spreadsheets.values.get({
@@ -52,9 +49,6 @@ export class GoogleSheetsService {
     return dict;
   }
 
-  /**
-   * Читает заголовки главной таблицы и возвращает массив
-   */
   private async loadHeaders(): Promise<string[]> {
     if (this.headers) return this.headers;
     const headerRow = await this.sheets.spreadsheets.values.get({
@@ -65,21 +59,23 @@ export class GoogleSheetsService {
     return this.headers;
   }
 
-  /**
-   * Возвращает подсказку для бота по ключу
-   */
+  private async getColumnIndexByKey(key: string): Promise<number> {
+    const dict = await this.loadFieldDictionary();
+    const headers = await this.loadHeaders();
+    const entry = dict[key];
+    if (!entry) throw new Error(`Нет ключа ${key} в справочнике`);
+    const idx = headers.indexOf(entry.header);
+    if (idx === -1) throw new Error(`Заголовок ${entry.header} не найден в главной таблице`);
+    return idx;
+  }
+
   public async getHintByKey(key: string): Promise<string | undefined> {
     const dict = await this.loadFieldDictionary();
     return dict[key]?.hint;
   }
 
-  /**
-   * Добавляет расчет с динамическим определением столбцов по справочнику
-   * params должен содержать ключи, совпадающие с ключами справочника
-   */
   async addCalculationWithFormulaCopy(params: Record<string, any>): Promise<number> {
     try {
-      // 1. Получаем количество строк (чтобы узнать, куда вставлять новую строку)
       const getRows = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: 'Расчет!A:A',
@@ -87,7 +83,6 @@ export class GoogleSheetsService {
       const rowCount = getRows.data.values ? getRows.data.values.length : 1;
       const newRow = rowCount + 1;
 
-      // 2. Копируем строку-образец (2-ю строку) в новую строку
       await this.sheets.spreadsheets.batchUpdate({
         spreadsheetId: this.spreadsheetId,
         requestBody: {
@@ -96,7 +91,7 @@ export class GoogleSheetsService {
               copyPaste: {
                 source: {
                   sheetId: this.sheetId,
-                  startRowIndex: 1, // строка 2 (индексация с 0)
+                  startRowIndex: 1,
                   endRowIndex: 2,
                   startColumnIndex: 0,
                   endColumnIndex: 21,
@@ -116,14 +111,11 @@ export class GoogleSheetsService {
         },
       });
 
-      // 3. Перезаписываем значения пользователя в новой строке ТОЛЬКО в нужных ячейках
       const now = new Date();
       const date = now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
       const dict = await this.loadFieldDictionary();
       const headers = await this.loadHeaders();
-      // Собираем значения для записи: ключ -> значение
       const valuesToWrite: Record<string, any> = { ...params, date };
-      // Для каждого ключа, который есть в справочнике и есть в valuesToWrite, пишем в нужную ячейку
       for (const key of Object.keys(valuesToWrite)) {
         if (!dict[key]) continue;
         const idx = headers.indexOf(dict[key].header);
@@ -148,9 +140,6 @@ export class GoogleSheetsService {
     return this.addCalculationWithFormulaCopy(params);
   }
 
-  /**
-   * Получает результат расчета из столбца U указанной строки
-   */
   async getCalculationResult(rowNumber: number): Promise<string | null> {
     try {
       const range = `Расчет!U${rowNumber}`;
@@ -169,7 +158,7 @@ export class GoogleSheetsService {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: 'Расчет', // все строки и столбцы
+        range: 'Расчет',
       });
       const rows = response.data.values || [];
       if (rows.length < 2) return { headers: [], userRows: [] };
@@ -181,7 +170,6 @@ export class GoogleSheetsService {
         throw new Error('Столбец userTelegramId не найден');
       }
 
-      // Фильтруем строки по userId (начиная со 2-й строки)
       const userRows = rows.slice(1).filter(row => Number(row[userIdColIdx]) === Number(userId));
       return { headers, userRows };
     } catch (error) {
