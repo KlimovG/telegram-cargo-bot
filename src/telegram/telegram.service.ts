@@ -5,6 +5,7 @@ import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { StateService } from './state.service';
 import { DeliveryState } from './types';
 import { AddCalculationParams } from '../google-sheets/types';
+import { MessageBuilder } from './utils/message.builder';
 
 @Update()
 @Injectable()
@@ -117,18 +118,14 @@ export class TelegramService {
       
       const message = userRows
         .map((row, index) => {
-          const date = row[getIdx('date')];
-          const type = row[getIdx('type')];
-          const weight = row[getIdx('weight')];
-          const volume = row[getIdx('volume')];
-          const price = row[getIdx('price')];
-          const result = row[getIdx('result')];
-          return `${index + 1}. ${date}\n` +
-                 `Тип: ${type}\n` +
-                 `Вес: ${weight}кг\n` +
-                 `Объем: ${volume}м³\n` +
-                 `Цена: ${price}¥\n` +
-                 `Результат: ${result}₽\n`;
+          const builder = new MessageBuilder();
+          builder.addLine(`${index + 1}. ${row[getIdx('date')]}`)
+            .addField('Тип', row[getIdx('type')])
+            .addField('Вес', row[getIdx('weight')], 'кг')
+            .addField('Объем', row[getIdx('volume')], 'м³')
+            .addField('Цена', row[getIdx('price')], '¥')
+            .addField('Результат', row[getIdx('result')], '₽');
+          return builder.build();
         })
         .join('\n');
 
