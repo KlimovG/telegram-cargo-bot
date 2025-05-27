@@ -1,104 +1,135 @@
-# Cargo Bot - Telegram Delivery Cost Calculator
+# Cargo Bot — Telegram-бот для расчёта стоимости доставки
 
-Telegram bot for calculating delivery costs based on cargo parameters. Built with NestJS and integrated with Google Sheets for calculations and data storage.
+Telegram-бот для расчёта стоимости доставки на основе параметров груза. Построен на NestJS и интегрирован с Google Sheets для вычислений и хранения данных.
 
-## Features
+## Возможности
 
-- Calculate delivery costs for cargo and white goods
-- Support for weight, volume, and price-based calculations
-- User request history tracking
-- Integration with Google Sheets for calculations and data storage
-- Multi-language support (Russian/English)
+- Расчёт стоимости доставки для карго и белых грузов
+- Поддержка расчёта по весу, объёму, цене
+- История запросов пользователя
+- Динамическая интеграция с Google Sheets (маппинг полей, подсказки, формулы)
+- Чистая архитектура: Facade, Builder, Validation Service, Controller
 
-## Prerequisites
+## Требования
 
-- Node.js (v14 or higher)
-- npm or yarn
-- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-- Google Cloud Project with Google Sheets API enabled
-- Google Service Account credentials
+- Node.js (v14 или выше)
+- npm или yarn
+- Токен Telegram-бота (получить у [@BotFather](https://t.me/BotFather))
+- Google Cloud Project с включённым Google Sheets API
+- Credentials сервисного аккаунта Google
 
-## Installation
+## Установка
 
-1. Clone the repository:
+1. Клонируйте репозиторий:
 ```bash
 git clone <repository-url>
 cd cargo-bot
 ```
 
-2. Install dependencies:
+2. Установите зависимости:
 ```bash
 npm install
 ```
 
-3. Create a `.env` file in the root directory with the following variables:
+3. Создайте файл `.env` в корне проекта со следующими переменными:
 ```env
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-GOOGLE_CREDENTIALS_PATH=path/to/your/credentials.json
-GOOGLE_SPREADSHEET_ID=your_spreadsheet_id
+TELEGRAM_BOT_TOKEN=ваш_токен_бота
+GOOGLE_CREDENTIALS_PATH=путь/к/credentials.json
+GOOGLE_SPREADSHEET_ID=ваш_id_таблицы
+GOOGLE_SHEET_ID=ваш_gid_листа # числовой gid основного листа
 ```
 
-4. Place your Google Service Account credentials JSON file in the specified path.
+4. Поместите JSON-файл сервисного аккаунта Google в указанный путь.
 
-## Google Sheets Setup
+## Настройка Google Sheets
 
-1. Create a new Google Spreadsheet with the following sheets:
-   - "Расчет" - For cost calculations
-   - "История" - For storing user request history
+1. Создайте новую Google-таблицу со следующими листами:
+   - "Расчет" — для расчётов стоимости
+   - "Справочник" — для маппинга полей, подсказок и единиц измерения
 
-2. Share the spreadsheet with the service account email address from your credentials file.
+2. Дайте доступ сервисному аккаунту (email из credentials) к таблице.
 
-3. Ensure the spreadsheet has the following structure:
-   - "Расчет" sheet: Columns A-F (Type, Weight, Volume, Price, Description, Result)
-   - "История" sheet: Columns A-F (Timestamp, User ID, Type, Weight, Volume, Price, Description)
+3. Убедитесь, что структура таблицы следующая:
+   - Лист "Расчет": динамические столбцы (заголовки можно менять, маппинг через "Справочник")
+   - Лист "Справочник": столбцы для ключа, заголовка, единицы, подсказки (используются для динамического маппинга и подсказок)
 
-## Running the Application
+## Запуск приложения
 
-Development mode:
+Режим разработки:
 ```bash
 npm run start:dev
 ```
 
-Production mode:
+Продакшн-режим:
 ```bash
 npm run build
 npm run start:prod
 ```
 
-## Usage
+## Использование
 
-1. Start a chat with your bot on Telegram
-2. Use the following commands:
-   - `/start` - Start the bot and get welcome message
-   - `/calculate` - Start a new calculation
-   - `/history` - View your calculation history
+1. Начните чат с ботом в Telegram
+2. Используйте команды:
+   - `/start` — приветствие и меню
+   - `/calc` — начать новый расчёт
+   - `/history` — посмотреть историю расчётов
 
-3. Follow the bot's prompts to enter:
-   - Cargo type (cargo/white)
-   - Weight (in kg)
-   - Volume (in m³)
-   - Price (in currency)
-   - Description
+3. Следуйте подсказкам бота:
+   - Тип доставки (cargo/white)
+   - Вес (кг)
+   - Объём единицы (м³)
+   - Количество (штук)
+   - Цена (в валюте)
+   - Описание
 
-## Project Structure
+## Архитектура
+
+### Основные слои и паттерны
+
+- **Контроллер** (`TelegramControllerService`): Обрабатывает события Telegram, маршрутизирует ввод пользователя, делегирует бизнес-логику.
+- **Фасад** (`TelegramBotFacade`): Оркестрирует бизнес-логику, состояние, валидацию и форматирование сообщений. Скрывает сложность от контроллера.
+- **Сервис валидации** (`DeliveryValidationService`): Централизует всю логику валидации и парсинга для каждого шага.
+- **Строитель** (`MessageBuilder`): Гибко и удобно формирует сообщения для Telegram.
+- **Сервис состояния** (`StateService`): Хранит состояние пользователя и ID сообщений бота для очистки.
+- **Сервис Google Sheets** (`GoogleSheetsService`): Интеграция с Google Sheets, динамический маппинг полей, копирование строк с формулами.
+
+### Структура проекта
 
 ```
 src/
-├── config/           # Configuration files
-├── google-sheets/    # Google Sheets integration
-├── telegram/         # Telegram bot handlers
-├── app.module.ts     # Main application module
-└── main.ts          # Application entry point
+├── config/                  # Конфигурация
+├── google-sheets/           # Интеграция с Google Sheets (сервис, типы, модуль)
+├── telegram/
+│   ├── delivery-validation.service.ts  # Валидация ввода
+│   ├── telegram-bot.facade.ts          # Фасад бизнес-логики
+│   ├── telegram.service.ts             # Контроллер (роутер событий)
+│   ├── state.service.ts                # Состояние пользователя и сообщений
+│   ├── utils/
+│   │   └── message.builder.ts          # MessageBuilder
+│   └── types/                          # Все типы/интерфейсы для состояния, шагов, валидации
+├── app.module.ts              # Главный модуль приложения
+└── main.ts                    # Точка входа
 ```
+
+### Dependency Injection
+- Все сервисы внедряются через DI NestJS (см. `telegram.module.ts`, `google-sheets.module.ts`).
+- Контроллер зависит только от фасада, который в свою очередь зависит от валидации, состояния и Google Sheets.
+
+### Как добавить новый шаг или валидацию
+1. Добавьте новую строку/ключ в лист "Справочник" для нового поля.
+2. Добавьте метод в `DeliveryValidationService` для валидации/парсинга.
+3. Расширьте `DeliveryStep` и `DeliveryState` в `types`.
+4. Добавьте обработчик в `TelegramBotFacade` для нового шага, используя новую валидацию.
+5. (Опционально) Обновите `MessageBuilder`, если хотите отображать новое поле в сообщениях.
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Форкните репозиторий
+2. Создайте ветку (`git checkout -b feature/amazing-feature`)
+3. Зафиксируйте изменения (`git commit -m 'Add some amazing feature'`)
+4. Запушьте ветку (`git push origin feature/amazing-feature`)
+5. Откройте Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+Проект распространяется под лицензией MIT — см. LICENSE. 
